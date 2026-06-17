@@ -128,20 +128,39 @@ function validateQuestionBank() {
   });
 }
 
+function createBalancedQuestionOrder(groupedQuestions) {
+  const buckets = Object.fromEntries(
+    DIMENSION_ORDER.map((dimension) => [dimension, shuffle(groupedQuestions[dimension])]),
+  );
+  let roundsLastDimension = null;
+  const rounds = Array.from({ length: 4 }, (_, roundIndex) => {
+    const previousDimension = roundIndex === 0 ? null : roundsLastDimension;
+    let order = shuffle(DIMENSION_ORDER);
+    if (previousDimension && order[0] === previousDimension) {
+      const swapIndex = order.findIndex((dimension) => dimension !== previousDimension);
+      [order[0], order[swapIndex]] = [order[swapIndex], order[0]];
+    }
+    roundsLastDimension = order[order.length - 1];
+    return order;
+  });
+
+  return rounds.flatMap((round) => round.map((dimension) => buckets[dimension].shift()));
+}
+
 function createSession() {
   validateQuestionBank();
-  const sampledQuestions = DIMENSION_ORDER.flatMap((dimension) => {
+  const sampledByDimension = Object.fromEntries(DIMENSION_ORDER.map((dimension) => {
     const group = questions.filter((question) => question.dimension === dimension);
     const reverseItems = shuffle(group.filter((question) => question.reverse));
     const normalItems = shuffle(group.filter((question) => !question.reverse));
     const reverseTake = Math.random() < 0.5 ? 1 : 2;
-    return shuffle([
+    return [dimension, shuffle([
       ...reverseItems.slice(0, reverseTake),
       ...normalItems.slice(0, 4 - reverseTake),
-    ]);
-  });
+    ])];
+  }));
   return {
-    scaleQuestions: shuffle(sampledQuestions),
+    scaleQuestions: createBalancedQuestionOrder(sampledByDimension),
     scenarioQuestions: shuffle(scenarios).slice(0, 3),
   };
 }
@@ -308,95 +327,154 @@ function Home({ onStart, setPage, error }) {
   );
 }
 
-function ScalePage({ session, answers, setAnswers, onNext }) {
+function ScalePage({ session, answers, setAnswers, currentIndex, setCurrentIndex, onNext }) {
+  const question = session.scaleQuestions[currentIndex];
   const answered = Object.keys(answers).length;
-  const canContinue = answered === session.scaleQuestions.length;
+  const selected = answers[question.id];
+  const progress = ((currentIndex + (selected ? 1 : 0)) / session.scaleQuestions.length) * 100;
+
+  function chooseAnswer(value) {
+    setAnswers((current) => ({ ...current, [question.id]: value }));
+    window.setTimeout(() => {
+      if (currentIndex < session.scaleQuestions.length - 1) {
+        setCurrentIndex(currentIndex + 1);
+      } else {
+        onNext();
+      }
+    }, 180);
+  }
+
   return (
-    <section className="py-4">
-      <PageTitle kicker="第一部分" title="量表答题" detail={`${answered}/${session.scaleQuestions.length} 已完成`} />
-      <Progress value={(answered / session.scaleQuestions.length) * 100} />
-      <div className="mt-6 grid gap-4">
-        {session.scaleQuestions.map((question, index) => (
-          <article className="glass rounded-3xl p-5 shadow-sm" key={question.id}>
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              <span className="rounded-full bg-slate-950 px-3 py-1 text-sm font-black text-white">{index + 1}</span>
-              <span className="rounded-full bg-white/75 px-3 py-1 text-sm font-bold text-slate-600">{question.dimensionName}</span>
-            </div>
-            <p className="text-lg font-black leading-8 text-slate-950">{question.text}</p>
-            <div className="mt-5 grid gap-2 sm:grid-cols-5">
-              {SCALE_OPTIONS.map((option) => (
-                <button
-                  className={`answer-ring rounded-2xl px-3 py-3 text-sm font-bold transition ${
-                    answers[question.id] === option.value
-                      ? "bg-slate-950 text-white shadow-lg"
-                      : "bg-white/75 text-slate-700 hover:-translate-y-0.5 hover:bg-white"
-                  }`}
-                  key={option.value}
-                  onClick={() => setAnswers((current) => ({ ...current, [question.id]: option.value }))}
-                >
-                  <span className="block text-lg font-black">{option.value}</span>
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </article>
-        ))}
+    <section className="grid min-h-[calc(100vh-112px)] items-center py-4">
+      <div>
+        <PageTitle
+          kicker="第一部分"
+          title="量表答题"
+          detail={`第 ${currentIndex + 1} / ${session.scaleQuestions.length} 题`}
+        />
+        <div className="mt-4">
+          <Progress value={progress} />
+        </div>
+        <article className="glass mt-6 rounded-[2rem] p-5 shadow-glow sm:p-8">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <span className="rounded-full bg-slate-950 px-4 py-2 text-sm font-black text-white">
+              已完成 {answered} 题
+            </span>
+          </div>
+          <p className="min-h-[112px] text-2xl font-black leading-10 text-slate-950 sm:text-3xl">
+            {question.text}
+          </p>
+          <div className="mt-8 grid gap-3 sm:grid-cols-5">
+            {SCALE_OPTIONS.map((option) => (
+              <button
+                className={`answer-ring rounded-2xl px-3 py-4 text-sm font-bold transition ${
+                  selected === option.value
+                    ? "bg-slate-950 text-white shadow-lg"
+                    : "bg-white/75 text-slate-700 hover:-translate-y-0.5 hover:bg-white"
+                }`}
+                key={option.value}
+                onClick={() => chooseAnswer(option.value)}
+              >
+                <span className="block text-2xl font-black">{option.value}</span>
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </article>
+        <div className="mt-5 flex justify-between">
+          <button
+            className="rounded-2xl bg-white/75 px-5 py-3 font-black text-slate-600 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={currentIndex === 0}
+            onClick={() => setCurrentIndex(currentIndex - 1)}
+          >
+            上一题
+          </button>
+          <div className="rounded-2xl bg-white/65 px-5 py-3 text-sm font-bold text-slate-500">
+            选择后自动进入下一题
+          </div>
+        </div>
       </div>
-      <StickyAction canContinue={canContinue} label="进入情境题" onClick={onNext} />
     </section>
   );
 }
 
-function ScenarioPage({ session, answers, setAnswers, onBack, onFinish }) {
+function ScenarioPage({ session, answers, setAnswers, currentIndex, setCurrentIndex, onBack, onFinish }) {
+  const scenario = session.scenarioQuestions[currentIndex];
   const answered = Object.keys(answers).length;
-  const canContinue = answered === session.scenarioQuestions.length;
+  const selected = answers[scenario.id];
+  const progress = ((currentIndex + (selected ? 1 : 0)) / session.scenarioQuestions.length) * 100;
+
+  function chooseOption(key) {
+    setAnswers((current) => ({ ...current, [scenario.id]: key }));
+    window.setTimeout(() => {
+      if (currentIndex < session.scenarioQuestions.length - 1) {
+        setCurrentIndex(currentIndex + 1);
+      } else {
+        onFinish();
+      }
+    }, 180);
+  }
+
   return (
-    <section className="py-4">
-      <PageTitle kicker="第二部分" title="情境选择" detail={`${answered}/${session.scenarioQuestions.length} 已完成`} />
-      <Progress value={(answered / session.scenarioQuestions.length) * 100} />
-      <div className="mt-6 grid gap-5">
-        {session.scenarioQuestions.map((scenario) => (
-          <article className="glass rounded-3xl p-5 shadow-sm" key={scenario.id}>
-            <div className="text-sm font-black uppercase tracking-[0.18em] text-cyan-700">{scenario.id}</div>
-            <h2 className="mt-2 text-2xl font-black text-slate-950">{scenario.title}</h2>
-            <p className="mt-3 text-base leading-8 text-slate-650">{scenario.text}</p>
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              {scenario.options.map((option) => (
-                <button
-                  className={`rounded-3xl p-4 text-left transition ${
-                    answers[scenario.id] === option.key
-                      ? "bg-slate-950 text-white shadow-lg"
-                      : "bg-white/75 text-slate-700 shadow-sm hover:-translate-y-0.5 hover:bg-white"
-                  }`}
-                  key={option.key}
-                  onClick={() => setAnswers((current) => ({ ...current, [scenario.id]: option.key }))}
-                >
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="grid h-8 w-8 place-items-center rounded-full bg-cyan-400 text-sm font-black text-slate-950">
-                      {option.key}
-                    </span>
-                    <span className="text-sm font-black">{option.type}</span>
-                  </div>
-                  <div className="text-sm leading-6">{option.text}</div>
-                </button>
-              ))}
-            </div>
-          </article>
-        ))}
-      </div>
-      <div className="sticky bottom-4 mt-8 flex justify-between gap-3 rounded-3xl bg-white/82 p-3 shadow-glow backdrop-blur">
-        <button className="rounded-2xl px-5 py-3 font-black text-slate-600 hover:bg-slate-100" onClick={onBack}>
-          返回量表
-        </button>
-        <button
-          className={`rounded-2xl px-6 py-3 font-black text-white transition ${
-            canContinue ? "bg-slate-950 hover:bg-slate-800" : "cursor-not-allowed bg-slate-300"
-          }`}
-          disabled={!canContinue}
-          onClick={onFinish}
-        >
-          查看结果
-        </button>
+    <section className="grid min-h-[calc(100vh-112px)] items-center py-4">
+      <div>
+        <PageTitle
+          kicker="第二部分"
+          title="情境选择"
+          detail={`第 ${currentIndex + 1} / ${session.scenarioQuestions.length} 题`}
+        />
+        <div className="mt-4">
+          <Progress value={progress} />
+        </div>
+        <article className="glass mt-6 rounded-[2rem] p-5 shadow-glow sm:p-8">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <span className="rounded-full bg-slate-950 px-4 py-2 text-sm font-black text-white">
+              已完成 {answered} 题
+            </span>
+            <span className="rounded-full bg-white/75 px-4 py-2 text-sm font-bold text-slate-600">
+              {scenario.id}
+            </span>
+          </div>
+          <h2 className="text-3xl font-black text-slate-950">{scenario.title}</h2>
+          <p className="mt-4 text-base leading-8 text-slate-650">{scenario.text}</p>
+          <div className="mt-7 grid gap-3 md:grid-cols-2">
+            {scenario.options.map((option) => (
+              <button
+                className={`rounded-3xl p-4 text-left transition ${
+                  selected === option.key
+                    ? "bg-slate-950 text-white shadow-lg"
+                    : "bg-white/75 text-slate-700 shadow-sm hover:-translate-y-0.5 hover:bg-white"
+                }`}
+                key={option.key}
+                onClick={() => chooseOption(option.key)}
+              >
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="grid h-8 w-8 place-items-center rounded-full bg-cyan-400 text-sm font-black text-slate-950">
+                    {option.key}
+                  </span>
+                </div>
+                <div className="text-sm leading-6">{option.text}</div>
+              </button>
+            ))}
+          </div>
+        </article>
+        <div className="mt-5 flex justify-between gap-3">
+          <button
+            className="rounded-2xl bg-white/75 px-5 py-3 font-black text-slate-600 shadow-sm transition hover:bg-white"
+            onClick={() => {
+              if (currentIndex === 0) {
+                onBack();
+              } else {
+                setCurrentIndex(currentIndex - 1);
+              }
+            }}
+          >
+            上一题
+          </button>
+          <div className="rounded-2xl bg-white/65 px-5 py-3 text-sm font-bold text-slate-500">
+            选择后自动进入下一步
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -607,6 +685,8 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [scaleAnswers, setScaleAnswers] = useState({});
   const [scenarioAnswers, setScenarioAnswers] = useState({});
+  const [scaleIndex, setScaleIndex] = useState(0);
+  const [scenarioIndex, setScenarioIndex] = useState(0);
   const [error, setError] = useState("");
 
   const result = useMemo(() => {
@@ -620,6 +700,8 @@ export default function App() {
       setSession(nextSession);
       setScaleAnswers({});
       setScenarioAnswers({});
+      setScaleIndex(0);
+      setScenarioIndex(0);
       setError("");
       setPage("scale");
     } catch (err) {
@@ -633,15 +715,30 @@ export default function App() {
       {page === "home" ? <Home error={error} onStart={startTest} setPage={setPage} /> : null}
       {page === "about" ? <About /> : null}
       {page === "scale" && session ? (
-        <ScalePage answers={scaleAnswers} onNext={() => setPage("scenario")} session={session} setAnswers={setScaleAnswers} />
+        <ScalePage
+          answers={scaleAnswers}
+          currentIndex={scaleIndex}
+          onNext={() => {
+            setScenarioIndex(0);
+            setPage("scenario");
+          }}
+          session={session}
+          setAnswers={setScaleAnswers}
+          setCurrentIndex={setScaleIndex}
+        />
       ) : null}
       {page === "scenario" && session ? (
         <ScenarioPage
           answers={scenarioAnswers}
-          onBack={() => setPage("scale")}
+          currentIndex={scenarioIndex}
+          onBack={() => {
+            setScaleIndex(session.scaleQuestions.length - 1);
+            setPage("scale");
+          }}
           onFinish={() => setPage("result")}
           session={session}
           setAnswers={setScenarioAnswers}
+          setCurrentIndex={setScenarioIndex}
         />
       ) : null}
       {page === "result" && result ? <ResultPage onRestart={startTest} result={result} /> : null}

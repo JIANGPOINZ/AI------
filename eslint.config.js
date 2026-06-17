@@ -18,6 +18,7 @@ export default [
         navigator: "readonly",
         Object: "readonly",
         React: "readonly",
+        window: "readonly",
       },
     },
     rules: {
