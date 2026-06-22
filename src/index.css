@@ -1,10 +1,11 @@
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   color: #182033;
   background: #f7f8ff;
+  font-family: "Nunito", "Inter", "SF Pro Rounded", "PingFang SC", "Microsoft YaHei", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -15,6 +16,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  font-family: "Nunito", "Inter", "SF Pro Rounded", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 button,
@@ -40,4 +42,22 @@ select {
 
 .answer-ring {
   box-shadow: inset 0 0 0 1px rgba(58, 65, 96, 0.1);
+}
+
+.type-code-soft {
+  font-size: clamp(72px, 15vw, 104px);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  line-height: 0.9;
+  color: rgba(54, 64, 92, 0.88);
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92),
+    0 -1px 0 rgba(255, 255, 255, 0.48),
+    0 10px 28px rgba(104, 116, 150, 0.18);
+}
+
+.id-card-paper {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 26px 70px rgba(86, 96, 125, 0.16);
 }

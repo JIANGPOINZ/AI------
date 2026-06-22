@@ -182,6 +182,27 @@ npm.cmd run build
 - 题目页面不再显示量表题所属维度
 - 情境题选项不再显示其对应的人格倾向类型
 
+### 2026-06-17：调整前端命名系统
+
+- 六种基础类型在前端改为英文展示名 + 中文解释名
+- 保留 mascot 形象描述，但不再把可爱角色名作为正式类型名称
+- 结果页主标题显示英文类型名，副标题显示中文解释名
+- 六维得分、情境题倾向、复制摘要统一使用新的展示命名
+- 混合型结果改为英文混合名称
+- 未修改题库、计分规则和结果判定规则
+
+### 2026-06-17：重构为 AI Use ID Card 视觉体验
+
+- 将结果页重构为“人格角色档案 + 可保存名片”
+- 新增 `components/Mascot.jsx`，用本地 SVG/CSS 绘制六种 AI 小生物形象
+- 新增 `components/PersonalityIndex.jsx`，展示 AI Creature Index / AI 使用人格图鉴
+- 新增 `components/ResultShareCard.jsx`，展示可导出的 AI USE ID CARD
+- 新增 `components/ResultPage.jsx`，管理结果页布局、雷达图、复制摘要和 PNG 保存
+- 新增 `data/personalityProfiles.js`，集中维护类型展示文案、颜色、标签和推荐 Prompt
+- 增加 `html-to-image`，支持把人格名片保存为 PNG
+- 优化首页、量表题页、情境题页文案和视觉样式
+- 未修改 `questions.js`、`scenarios.js`，未修改计分和判定规则
+
 ## 重要约束
 
 - 不在页面代码中新增题目
