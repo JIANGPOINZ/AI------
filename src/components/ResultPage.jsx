@@ -1,5 +1,5 @@
-﻿import { useMemo, useRef, useState } from "react";
-import { toPng } from "html-to-image";
+import { useMemo, useRef, useState } from "react";
+import { toBlob, toPng } from "html-to-image";
 import ResultShareCard from "./ResultShareCard.jsx";
 import { getEnergyName, getProfile, getResultDisplay } from "../data/personalityProfiles.js";
 
@@ -85,6 +85,72 @@ function todayLabel() {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+}
+
+
+function isMobileSaveTarget() {
+  if (typeof navigator === "undefined") return false;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
+}
+
+function getExportPixelRatio(node) {
+  const rect = node.getBoundingClientRect();
+  const longSide = Math.max(rect.width, rect.height, 1);
+  const maxLongSide = isMobileSaveTarget() ? 2200 : 3200;
+  const maxRatio = isMobileSaveTarget() ? 1.5 : 2;
+  return Math.max(1, Math.min(maxRatio, maxLongSide / longSide));
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [header, payload] = dataUrl.split(",");
+  const mime = header.match(/data:(.*?);base64/)?.[1] || "image/png";
+  const binary = globalThis.atob(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new globalThis.Blob([bytes], { type: mime });
+}
+
+async function waitForCardAssets(node) {
+  const images = Array.from(node.querySelectorAll("img"));
+  await Promise.all(
+    images.map((image) => {
+      if (image.complete && image.naturalWidth > 0) {
+        return image.decode ? image.decode().catch(() => undefined) : Promise.resolve();
+      }
+      return new Promise((resolve) => {
+        image.addEventListener("load", resolve, { once: true });
+        image.addEventListener("error", resolve, { once: true });
+      });
+    }),
+  );
+  if (document.fonts?.ready) await document.fonts.ready.catch(() => undefined);
+  await new Promise((resolve) => globalThis.requestAnimationFrame(resolve));
+}
+
+async function createCardBlob(node) {
+  const options = {
+    cacheBust: false,
+    pixelRatio: getExportPixelRatio(node),
+    backgroundColor: "#f7f8ff",
+  };
+  const blob = await toBlob(node, options);
+  if (blob) return blob;
+  const dataUrl = await toPng(node, options);
+  return dataUrlToBlob(dataUrl);
+}
+
+function downloadBlob(blob, filename) {
+  const url = globalThis.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.download = filename;
+  link.href = url;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => globalThis.URL.revokeObjectURL(url), 30000);
 }
 
 function EnergyEvidence({ scores }) {
@@ -181,6 +247,8 @@ function UserManual({ display }) {
 export default function ResultPage({ result, onRestart }) {
   const cardRef = useRef(null);
   const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [mobileShareFile, setMobileShareFile] = useState(null);
   const display = useMemo(() => getResultDisplay(result), [result]);
   const profile = display.guardianProfile || getProfile(result.profileKey);
   const ranked = [...result.scores].sort((a, b) => b.percent - a.percent);
@@ -204,19 +272,48 @@ export default function ResultPage({ result, onRestart }) {
     await navigator.clipboard.writeText(summary);
   }
 
-  async function saveCard() {
-    if (!cardRef.current) return;
-    setSaving(true);
+  async function shareGeneratedCard() {
+    if (!mobileShareFile || !navigator.canShare?.({ files: [mobileShareFile] })) return;
     try {
-      const dataUrl = await toPng(cardRef.current, {
-        cacheBust: true,
-        pixelRatio: 2,
-        backgroundColor: "#f7f8ff",
+      await navigator.share({
+        files: [mobileShareFile],
+        title: "AI \u4f7f\u7528\u4eba\u683c\u540d\u7247",
+        text: "\u4fdd\u5b58\u6216\u5206\u4eab\u6211\u7684 AI \u4f7f\u7528\u4eba\u683c\u540d\u7247\u3002",
       });
-      const link = document.createElement("a");
-      link.download = `ai-use-id-card-${aiId}.png`;
-      link.href = dataUrl;
-      link.click();
+      setMobileShareFile(null);
+      setSaveMessage("\u5df2\u6253\u5f00\u624b\u673a\u4fdd\u5b58/\u5206\u4eab\u9762\u677f\uff0c\u53ef\u4ee5\u4fdd\u5b58\u5230\u76f8\u518c\u6216\u53d1\u9001\u7ed9\u670b\u53cb\u3002");
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        setSaveMessage("\u5df2\u53d6\u6d88\u4fdd\u5b58\u3002\u8bf7\u518d\u6b21\u70b9\u51fb\u4fdd\u5b58\u5230\u624b\u673a/\u76f8\u518c\u3002");
+      } else {
+        setSaveMessage("\u624b\u673a\u4fdd\u5b58\u9762\u677f\u6253\u5f00\u5931\u8d25\u3002\u8bf7\u6362 Safari / Chrome \u91cd\u8bd5\u3002");
+      }
+    }
+  }
+
+  async function saveCard() {
+    if (!cardRef.current || saving) return;
+    const filename = `ai-use-id-card-${aiId}.png`;
+    setSaving(true);
+    setMobileShareFile(null);
+    setSaveMessage("\u6b63\u5728\u6574\u7406\u56fe\u7247\u8d44\u6e90...");
+    try {
+      await waitForCardAssets(cardRef.current);
+      const blob = await createCardBlob(cardRef.current);
+
+      if (isMobileSaveTarget() && typeof globalThis.File === "function") {
+        const file = new globalThis.File([blob], filename, { type: "image/png" });
+        if (navigator.canShare?.({ files: [file] })) {
+          setMobileShareFile(file);
+          setSaveMessage("\u56fe\u7247\u5df2\u751f\u6210\u3002\u624b\u673a\u7aef\u8bf7\u518d\u70b9\u4e00\u6b21\u201c\u4fdd\u5b58\u5230\u624b\u673a/\u76f8\u518c\u201d\u3002");
+          return;
+        }
+      }
+
+      downloadBlob(blob, filename);
+      setSaveMessage(isMobileSaveTarget() ? "\u5982\u679c\u624b\u673a\u6ca1\u6709\u81ea\u52a8\u4fdd\u5b58\uff0c\u8bf7\u5728\u6d4f\u89c8\u5668\u4e0b\u8f7d\u5217\u8868\u4e2d\u67e5\u770b\uff0c\u6216\u6362 Safari / Chrome \u91cd\u8bd5\u3002" : "\u56fe\u7247\u5df2\u751f\u6210\uff0c\u6d4f\u89c8\u5668\u4f1a\u81ea\u52a8\u4e0b\u8f7d PNG \u6587\u4ef6\u3002");
+    } catch {
+      setSaveMessage("\u56fe\u7247\u751f\u6210\u5931\u8d25\u3002\u8bf7\u5237\u65b0\u9875\u9762\u540e\u91cd\u8bd5\uff0c\u6216\u6362 Safari / Chrome \u6253\u5f00\u3002");
     } finally {
       setSaving(false);
     }
@@ -248,7 +345,8 @@ export default function ResultPage({ result, onRestart }) {
         <UserManual display={display} />
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <button
-            className="rounded-2xl bg-slate-950 px-6 py-4 font-black text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-slate-800"
+            className="rounded-2xl bg-slate-950 px-6 py-4 font-black text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-wait disabled:opacity-70"
+            disabled={saving}
             onClick={saveCard}
           >
             {saving ? "正在生成图片..." : "保存我的 AI 人格名片"}
@@ -263,6 +361,17 @@ export default function ResultPage({ result, onRestart }) {
             重新测试
           </button>
         </div>
+        {mobileShareFile ? (
+          <div className="flex justify-center">
+            <button
+              className="rounded-2xl bg-white/90 px-6 py-4 font-black text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
+              onClick={shareGeneratedCard}
+            >
+              {"\u4fdd\u5b58\u5230\u624b\u673a/\u76f8\u518c"}
+            </button>
+          </div>
+        ) : null}
+        {saveMessage ? <p className="text-center text-sm font-bold leading-6 text-slate-500" role="status">{saveMessage}</p> : null}
       </div>
     </section>
   );
