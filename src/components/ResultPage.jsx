@@ -3,73 +3,75 @@ import { toBlob, toPng } from "html-to-image";
 import ResultShareCard from "./ResultShareCard.jsx";
 import { getEnergyName, getProfile, getResultDisplay } from "../data/personalityProfiles.js";
 
-const TYPE_DECODER = [
-  {
-    S: {
-      english: "Spark First",
-      chinese: "先让 AI 点火",
-      detail: "你更倾向遇到任务时先让 AI 打开思路。",
-      strength: "启动快，不容易卡在空白里。",
-      reminder: "不要让 AI 的第一版框架直接决定你的最终方向。",
-    },
-    O: {
-      english: "Own First",
-      chinese: "先自己想一步",
-      detail: "你更倾向先形成自己的想法，再让 AI 介入。",
-      strength: "更能保留自己的判断和表达。",
-      reminder: "任务太大时，不必等完全想清楚才使用 AI。",
-    },
+const SINGLE_LETTER_DECODER = {
+  S: {
+    english: "Spark First",
+    chinese: "先让 AI 点火",
+    dimension: "start",
+    reason: "你的点火力较高，说明你更习惯遇到任务时先让 AI 打开思路。",
+    advantage: "启动快，不容易卡在空白里。",
+    reminder: "不要让 AI 的第一版框架直接决定你的最终方向。",
   },
-  {
-    C: {
-      english: "Command",
-      chinese: "我来控场",
-      detail: "你会给 AI 明确的要求、格式、限制和修改方向。",
-      strength: "主导感强，不容易被 AI 带跑。",
-      reminder: "控制太强时，可能会错过 AI 自由发散出的意外角度。",
-    },
-    F: {
-      english: "Flow",
-      chinese: "顺着聊下去",
-      detail: "你更愿意顺着 AI 的回答继续探索。",
-      strength: "容易发现意外方向，适合开放式探索。",
-      reminder: "容易越聊越散，最后需要主动收束。",
-    },
+  O: {
+    english: "Own First",
+    chinese: "先自己想一步",
+    dimension: "start",
+    reason: "你的点火力不算高，说明你更倾向先形成自己的想法，再让 AI 介入。",
+    advantage: "更能保留自己的判断和表达。",
+    reminder: "任务太大时，不必等完全想清楚才使用 AI。",
   },
-  {
-    M: {
-      english: "Merge",
-      chinese: "一起共创",
-      detail: "你更喜欢和 AI 多轮讨论、融合想法、反复打磨。",
-      strength: "适合创意、选题、内容策划和方案生成。",
-      reminder: "共创容易产生太多方向，记得让 AI 帮你排序。",
-    },
-    D: {
-      english: "Delegate",
-      chinese: "交给 AI 做",
-      detail: "你更倾向把整理、归纳、初稿、排版等任务交给 AI。",
-      strength: "效率高，能快速减少重复劳动。",
-      reminder: "AI 完成了材料，不等于你已经真正理解内容。",
-    },
+  C: {
+    english: "Command",
+    chinese: "我来控场",
+    dimension: "control",
+    reason: "你的控场力较高，说明你会给 AI 明确的要求、格式、限制和修改方向。",
+    advantage: "主导感强，不容易被 AI 带跑。",
+    reminder: "控制太强时，可能会错过 AI 自由发散出的意外角度。",
   },
-  {
-    A: {
-      english: "Audit",
-      chinese: "先查一下",
-      detail: "你会追问 AI 的依据、漏洞、风险和反例。",
-      strength: "不容易被 AI 的流畅表达误导。",
-      reminder: "过度审查会拖慢推进，低风险任务可以适当放手。",
-    },
-    R: {
-      english: "Rely",
-      chinese: "先用起来",
-      detail: "你更容易先采纳 AI 给出的完整答案。",
-      strength: "推进速度快，适合时间紧或低风险任务。",
-      reminder: "重要问题仍然需要核查来源和判断依据。",
-    },
+  F: {
+    english: "Flow",
+    chinese: "顺着聊下去",
+    dimension: "control",
+    reason: "你的控场力不算高，说明你更愿意顺着 AI 的回答继续探索。",
+    advantage: "容易发现意外方向，适合开放式探索。",
+    reminder: "容易越聊越散，最后需要主动收束。",
   },
-];
+  A: {
+    english: "Audit",
+    chinese: "先查一下",
+    dimension: "audit",
+    reason: "你的查错力较高，说明你会追问 AI 的依据、漏洞、风险和反例。",
+    advantage: "不容易被 AI 的流畅表达误导。",
+    reminder: "过度审查会拖慢推进，低风险任务可以适当放手。",
+  },
+  R: {
+    english: "Rely",
+    chinese: "先用起来",
+    dimension: "audit",
+    reason: "你的查错力不算高，说明你更容易先采纳 AI 给出的完整答案。",
+    advantage: "推进速度快，适合时间紧或低风险任务。",
+    reminder: "重要问题仍然需要核查来源和判断依据。",
+  },
+};
 
+const MERGE_DELEGATE_DECODER = {
+  M: {
+    english: "Merge",
+    chinese: "一起共创",
+    reason: "你的共创力高于或接近高于代办力，说明你更喜欢和 AI 多轮讨论、融合想法、反复打磨，而不是只让它代办。",
+    advantage: "适合创意、选题、内容策划和方案生成。",
+    reminder: "共创容易产生太多方向，记得让 AI 帮你排序。",
+  },
+  D: {
+    english: "Delegate",
+    chinese: "交给 AI 做",
+    reason: "你的代办力高于共创力，说明你更倾向把整理、归纳、初稿、排版等任务交给 AI。",
+    advantage: "效率高，能快速减少重复劳动。",
+    reminder: "AI 完成了材料，不等于你已经真正理解内容。",
+  },
+};
+
+const DECODER_ACCENTS = ["#38bdf8", "#fb923c", "#a855f7", "#10b981"];
 function padScore(value, length) {
   return String(Math.round(value || 0)).padStart(length, "0");
 }
@@ -153,70 +155,229 @@ function downloadBlob(blob, filename) {
   window.setTimeout(() => globalThis.URL.revokeObjectURL(url), 30000);
 }
 
-function EnergyEvidence({ scores }) {
+function getDecoderScore(scores, dimension) {
+  return scores.find((score) => score.dimension === dimension || score.persona === dimension) || { dimension, persona: dimension, percent: 0 };
+}
+
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, Math.round(value || 0)));
+}
+
+function getSingleScoreStrength(score) {
+  if (score >= 70) return "倾向明显";
+  if (score >= 55) return "中等倾向";
+  if (score >= 45) return "边界倾向";
+  return "反向倾向明显";
+}
+
+function getMergeDelegateStrength(diff) {
+  if (diff >= 15) return "明显偏 M";
+  if (diff >= 5) return "中等偏 M";
+  if (diff >= -4) return "M/D 接近，场景切换明显";
+  return "偏 D";
+}
+
+function EnergyMeter({ label, score, accent, selected = true }) {
+  const percent = clampPercent(score);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-3 text-xs font-black text-slate-500">
+        <span>{label}</span>
+        <span className={selected ? "text-slate-900" : "text-slate-400"}>{percent}</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-white/80 shadow-inner">
+        <div
+          className="h-full rounded-full transition-all"
+          style={{
+            width: `${percent}%`,
+            background: selected ? `linear-gradient(90deg, ${accent}, #f9c7e8)` : "#cbd5e1",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function DecoderTextBlock({ label, children, tone }) {
+  const colorClass = tone === "warm" ? "text-amber-700" : tone === "green" ? "text-emerald-700" : "text-cyan-700";
+
+  return (
+    <div className="border-t border-white/75 pt-3">
+      <div className={`text-[11px] font-black uppercase tracking-[0.16em] ${colorClass}`}>{label}</div>
+      <p className="mt-1 text-sm font-bold leading-6 text-slate-700">{children}</p>
+    </div>
+  );
+}
+
+function SingleLetterCard({ letter, index, scores }) {
+  const item = SINGLE_LETTER_DECODER[letter];
+  const score = getDecoderScore(scores, item.dimension);
+  const percent = clampPercent(score.percent);
+  const strength = getSingleScoreStrength(percent);
+  const isBoundary = strength === "边界倾向";
+  const accent = DECODER_ACCENTS[index];
+
+  return (
+    <article className="relative overflow-hidden rounded-[1.75rem] border border-white/85 bg-white/72 p-4 shadow-sm ring-1 ring-white/70 sm:p-5">
+      <div className="absolute right-4 top-4 h-16 w-16 rounded-full opacity-20 blur-xl" style={{ background: accent }} />
+      <div className="relative flex items-start gap-3">
+        <div
+          className="grid h-14 w-14 shrink-0 place-items-center rounded-[1.25rem] bg-white text-4xl font-black shadow-sm"
+          style={{ color: accent, boxShadow: `0 16px 32px ${accent}1f` }}
+        >
+          {letter}
+        </div>
+        <div className="min-w-0">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{item.english}</div>
+          <h3 className="mt-1 text-xl font-black leading-tight text-slate-950">{item.chinese}</h3>
+          <div className="mt-2 inline-flex rounded-full bg-white/72 px-3 py-1 text-xs font-black text-slate-600 shadow-sm">{strength}</div>
+        </div>
+      </div>
+
+      <div className="relative mt-5">
+        <EnergyMeter accent={accent} label={getEnergyName(item.dimension)} score={percent} />
+      </div>
+
+      {isBoundary ? (
+        <p className="mt-3 rounded-2xl bg-white/70 px-3 py-2 text-xs font-black leading-5 text-slate-500">
+          你的这个字母不是绝对倾向，更可能会随任务场景变化。
+        </p>
+      ) : null}
+
+      <div className="mt-4 grid gap-3">
+        <DecoderTextBlock label="为什么是这个字母">{item.reason}</DecoderTextBlock>
+        <DecoderTextBlock label="优势" tone="green">{item.advantage}</DecoderTextBlock>
+        <DecoderTextBlock label="提醒" tone="warm">{item.reminder}</DecoderTextBlock>
+      </div>
+    </article>
+  );
+}
+
+function MergeDelegateCard({ letter, index, scores }) {
+  const item = MERGE_DELEGATE_DECODER[letter];
+  const cocreate = getDecoderScore(scores, "cocreate");
+  const outsource = getDecoderScore(scores, "outsource");
+  const cocreatePercent = clampPercent(cocreate.percent);
+  const outsourcePercent = clampPercent(outsource.percent);
+  const diff = cocreatePercent - outsourcePercent;
+  const strength = getMergeDelegateStrength(diff);
+  const isBoundary = diff >= -4 && diff <= 4;
+  const accent = DECODER_ACCENTS[index];
+
+  return (
+    <article className="relative overflow-hidden rounded-[1.75rem] border border-white/85 bg-white/72 p-4 shadow-sm ring-1 ring-white/70 sm:p-5">
+      <div className="absolute right-4 top-4 h-16 w-16 rounded-full opacity-20 blur-xl" style={{ background: accent }} />
+      <div className="relative flex items-start gap-3">
+        <div
+          className="grid h-14 w-14 shrink-0 place-items-center rounded-[1.25rem] bg-white text-4xl font-black shadow-sm"
+          style={{ color: accent, boxShadow: `0 16px 32px ${accent}1f` }}
+        >
+          {letter}
+        </div>
+        <div className="min-w-0">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{item.english}</div>
+          <h3 className="mt-1 text-xl font-black leading-tight text-slate-950">{item.chinese}</h3>
+          <div className="mt-2 inline-flex rounded-full bg-white/72 px-3 py-1 text-xs font-black text-slate-600 shadow-sm">{strength}</div>
+        </div>
+      </div>
+
+      <div className="relative mt-5 grid gap-3">
+        <EnergyMeter accent={accent} label="共创力" score={cocreatePercent} selected={letter === "M"} />
+        <EnergyMeter accent={accent} label="代办力" score={outsourcePercent} selected={letter === "D"} />
+      </div>
+
+      {isBoundary ? (
+        <p className="mt-3 rounded-2xl bg-white/70 px-3 py-2 text-xs font-black leading-5 text-slate-500">
+          你的这个字母不是绝对倾向，更可能会随任务场景变化。
+        </p>
+      ) : null}
+
+      <div className="mt-4 grid gap-3">
+        <DecoderTextBlock label="为什么是这个字母">{item.reason}</DecoderTextBlock>
+        <DecoderTextBlock label="优势" tone="green">{item.advantage}</DecoderTextBlock>
+        <DecoderTextBlock label="提醒" tone="warm">{item.reminder}</DecoderTextBlock>
+      </div>
+    </article>
+  );
+}
+
+function FullScoresToggle({ scores }) {
+  const [open, setOpen] = useState(false);
   const sortedScores = [...scores].sort((a, b) => b.percent - a.percent);
 
   return (
-    <section className="glass rounded-[2rem] p-5 shadow-glow sm:p-6">
-      <div className="text-xs font-black uppercase tracking-[0.24em] text-cyan-700">Energy Evidence</div>
-      <h2 className="mt-2 text-3xl font-black text-slate-950">你的六维能量分数</h2>
-      <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-        这些分数是人格码的依据：越高，说明你越常用这种方式和 AI 协作。
-      </p>
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
-        {sortedScores.map((score, index) => (
-          <article className={`rounded-[1.5rem] bg-white/72 p-4 shadow-sm ${index === 0 ? "ring-2 ring-cyan-200/70" : ""}`} key={score.dimension}>
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="text-lg font-black text-slate-950">{getEnergyName(score.persona)}</div>
-                <div className="mt-1 text-xs font-bold text-slate-500">{index === 0 ? "Main Energy" : index === 1 ? "Sub Energy" : "Energy"}</div>
-              </div>
-              <div className="text-4xl font-black leading-none text-slate-900">{score.percent}</div>
+    <div className="mt-5 rounded-[1.5rem] border border-white/80 bg-white/45 p-3">
+      <button
+        className="flex w-full items-center justify-between gap-3 rounded-[1.2rem] bg-white/70 px-4 py-3 text-left text-sm font-black text-slate-700 shadow-sm transition hover:bg-white"
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        <span>查看完整六维分数</span>
+        <span className="text-xs text-slate-400">{open ? "收起" : "展开"}</span>
+      </button>
+      {open ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {sortedScores.map((score) => (
+            <div className="rounded-2xl bg-white/70 px-3 py-3 shadow-sm" key={score.dimension}>
+              <EnergyMeter accent="#7dd3fc" label={getEnergyName(score.dimension)} score={score.percent} />
             </div>
-            <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/90">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-violet-300 to-amber-200"
-                style={{ width: `${Math.max(0, Math.min(100, score.percent))}%` }}
-              />
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
-function TypeDecoder({ code }) {
+
+function TypeDecoder({ code, scores }) {
   const letters = code.split("");
 
   return (
     <section className="glass rounded-[2rem] p-5 shadow-glow sm:p-6">
       <div className="text-xs font-black uppercase tracking-[0.24em] text-cyan-700">Type Decoder</div>
       <h2 className="mt-2 text-3xl font-black text-slate-950">为什么你是 {code}？</h2>
-      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {letters.map((letter, index) => {
-          const item = TYPE_DECODER[index][letter];
-          return (
-            <article className="rounded-[1.6rem] bg-white/72 p-4 shadow-sm" key={`${letter}-${index}`}>
-              <div className="flex items-start gap-3">
-                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/88 text-3xl font-black text-slate-800 shadow-sm">
-                  {letter}
-                </div>
-                <div>
-                  <div className="text-sm font-black uppercase tracking-[0.12em] text-slate-500">{item.english}</div>
-                  <h3 className="mt-1 text-lg font-black text-slate-950">{item.chinese}</h3>
-                </div>
-              </div>
-              <p className="mt-3 text-sm font-bold leading-6 text-slate-700">{item.detail}</p>
-              <div className="mt-3 rounded-2xl bg-cyan-50/70 p-3 text-sm leading-6 text-slate-700">
-                <span className="font-black text-cyan-700">优势：</span>{item.strength}
-              </div>
-              <div className="mt-2 rounded-2xl bg-amber-50/75 p-3 text-sm leading-6 text-slate-700">
-                <span className="font-black text-amber-700">提醒：</span>{item.reminder}
-              </div>
-            </article>
-          );
-        })}
+      <p className="mt-2 max-w-3xl text-sm font-bold leading-6 text-slate-500">
+        四个字母不是标签堆叠，而是由点火力、控场力、共创力与代办力的比较、查错力共同推出来的使用倾向。
+      </p>
+      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {letters.map((letter, index) => (
+          index === 2 ? (
+            <MergeDelegateCard index={index} key={`${letter}-${index}`} letter={letter} scores={scores} />
+          ) : (
+            <SingleLetterCard index={index} key={`${letter}-${index}`} letter={letter} scores={scores} />
+          )
+        ))}
       </div>
+      <FullScoresToggle scores={scores} />
+    </section>
+  );
+}
+
+function HiddenMode({ mode, score }) {
+  const percent = clampPercent(score?.percent);
+
+  return (
+    <section className="glass rounded-[2rem] p-5 shadow-glow sm:p-6">
+      <div className="text-xs font-black uppercase tracking-[0.24em] text-cyan-700">Hidden Mode</div>
+      <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-3xl font-black text-slate-950">Moon Mode / Soft Mode / Tool Mode</h2>
+          <p className="mt-2 text-sm font-bold leading-6 text-slate-500">共感力不进入四字母人格码，但会影响你把 AI 当作情绪缓冲、陪伴整理，还是纯工具来使用。</p>
+        </div>
+        <div className="w-full rounded-[1.5rem] bg-white/70 p-4 shadow-sm sm:max-w-xs">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">共感力</div>
+              <div className="mt-1 text-lg font-black text-slate-950">{mode.label}</div>
+            </div>
+            <div className="text-4xl font-black leading-none text-slate-900">{percent}</div>
+          </div>
+          <div className="mt-3">
+            <EnergyMeter accent="#8b5cf6" label={mode.shortLabel} score={percent} />
+          </div>
+        </div>
+      </div>
+      <p className="mt-4 rounded-[1.5rem] bg-white/58 px-4 py-3 text-sm font-bold leading-6 text-slate-700 shadow-sm">{mode.description}</p>
     </section>
   );
 }
@@ -335,13 +496,12 @@ export default function ResultPage({ result, onRestart }) {
           cardRef={cardRef}
           clarity={result.clarity}
           display={display}
-          primaryScore={primaryScore}
           profile={profile}
           secondaryScore={secondaryScore}
           testDate={testDate}
         />
-        <EnergyEvidence scores={result.scores} />
-        <TypeDecoder code={display.personalityCode} />
+        <TypeDecoder code={display.personalityCode} scores={result.scores} />
+        <HiddenMode mode={display.hiddenMode} score={getDecoderScore(result.scores, "emotion")} />
         <UserManual display={display} />
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <button
