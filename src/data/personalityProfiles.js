@@ -293,7 +293,7 @@ const HIDDEN_MODES = {
     englishName: "Moon Mode",
     chineseName: "月亮模式",
     label: "Moon Mode｜月亮模式",
-    shortLabel: "高共感",
+    shortLabel: "经常聊情绪",
     description: "你会明显借 AI 接住情绪、整理压力和说不清的感受。",
   },
   medium: {
@@ -301,7 +301,7 @@ const HIDDEN_MODES = {
     englishName: "Soft Mode",
     chineseName: "软着陆模式",
     label: "Soft Mode｜软着陆模式",
-    shortLabel: "中共感",
+    shortLabel: "偶尔缓解压力",
     description: "你偶尔会让 AI 帮自己缓冲压力、整理心情，但仍主要围绕任务推进。",
   },
   low: {
@@ -309,7 +309,7 @@ const HIDDEN_MODES = {
     englishName: "Tool Mode",
     chineseName: "工具模式",
     label: "Tool Mode｜工具模式",
-    shortLabel: "低共感",
+    shortLabel: "很少聊情绪",
     description: "你更倾向把 AI 当作工具和执行助手，很少让它参与情绪整理。",
   },
 };
@@ -445,6 +445,8 @@ export function getResultDisplay(result) {
     guardianProfile: guardian,
   };
 }
+
+
 
 
 

@@ -1,0 +1,7 @@
+﻿node_modules/
+dist/
+.vercel/
+*.log
+.DS_Store
+public/mascots/cleaned/
+public/mascots/originals-with-checkerboard/

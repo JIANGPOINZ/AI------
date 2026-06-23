@@ -31,7 +31,7 @@ function SubEnergyPill({ score, energy }) {
   );
 }
 
-function StackedMascot({ guardian, secondaryProfile, hiddenMode }) {
+function StackedMascot({ guardian, secondaryProfile }) {
   const showSecondary = secondaryProfile && secondaryProfile.key !== guardian.key;
 
   return (
@@ -41,9 +41,7 @@ function StackedMascot({ guardian, secondaryProfile, hiddenMode }) {
           <Mascot frameless profile={secondaryProfile} imageClassName="scale-110" variant="hero" />
         </div>
       ) : null}
-      <div className="absolute right-3 top-4 z-20 rounded-full bg-white/72 px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm sm:right-8">
-        {hiddenMode.shortLabel}
-      </div>
+
       <Mascot
         frameless
         profile={guardian}
@@ -85,7 +83,7 @@ export default function ResultShareCard({
           {display.personalityCode}
         </div>
 
-        <StackedMascot guardian={guardian} hiddenMode={display.hiddenMode} secondaryProfile={secondaryProfile} />
+        <StackedMascot guardian={guardian} secondaryProfile={secondaryProfile} />
 
         <h1 className="mt-2 text-[32px] font-black leading-tight text-slate-950 sm:text-[38px]" style={{ color: colorProfile.colors.dark }}>
           {display.chineseName}
@@ -125,3 +123,4 @@ export default function ResultShareCard({
     </section>
   );
 }
+

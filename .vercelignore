@@ -1,0 +1,7 @@
+﻿node_modules
+dist
+dev-server.log
+dev-server.err.log
+PROJECT_HANDOFF.md
+public/mascots/cleaned
+public/mascots/originals-with-checkerboard
