@@ -1,4 +1,4 @@
-﻿export const personalityProfiles = {
+export const personalityProfiles = {
   start: {
     typeId: "start",
     displayName: "Spark Starter",
@@ -381,8 +381,8 @@ function isHigh(score) {
 }
 
 function getHiddenMode(emotionScore) {
-  if (emotionScore.percent >= 70) return HIDDEN_MODES.high;
-  if (emotionScore.percent >= 40) return HIDDEN_MODES.medium;
+  if (emotionScore.percent >= 65) return HIDDEN_MODES.high;
+  if (emotionScore.percent >= 35) return HIDDEN_MODES.medium;
   return HIDDEN_MODES.low;
 }
 
@@ -417,7 +417,7 @@ export function getResultDisplay(result) {
   const outsource = getScore(scores, "outsource");
   const emotion = getScore(scores, "emotion");
 
-  const code = [
+  const code = result.typeCode || [
     isHigh(start) ? "S" : "O",
     isHigh(control) ? "C" : "F",
     cocreate.percent >= outsource.percent ? "M" : "D",

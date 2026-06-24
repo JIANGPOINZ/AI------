@@ -163,18 +163,55 @@ function clampPercent(value) {
   return Math.max(0, Math.min(100, Math.round(value || 0)));
 }
 
-function getSingleScoreStrength(score) {
-  if (score >= 70) return "倾向明显";
-  if (score >= 55) return "中等倾向";
-  if (score >= 45) return "边界倾向";
-  return "反向倾向明显";
+function getGapStrength(gap) {
+  if (gap >= 4) return "倾向明显";
+  if (gap >= 2) return "中等倾向";
+  return "边界倾向";
 }
 
-function getMergeDelegateStrength(diff) {
-  if (diff >= 15) return "明显偏 M";
-  if (diff >= 5) return "中等偏 M";
-  if (diff >= -4) return "M/D 接近，场景切换明显";
-  return "偏 D";
+function buildFallbackAxisResults(code, scores) {
+  const start = getDecoderScore(scores, "start").percent;
+  const control = getDecoderScore(scores, "control").percent;
+  const cocreate = getDecoderScore(scores, "cocreate").percent;
+  const outsource = getDecoderScore(scores, "outsource").percent;
+  const audit = getDecoderScore(scores, "audit").percent;
+  const items = [
+    { axis: "S/O", left: "S", right: "O", leftScore: start, rightScore: 100 - start, selected: code[0] },
+    { axis: "C/F", left: "C", right: "F", leftScore: control, rightScore: 100 - control, selected: code[1] },
+    { axis: "M/D", left: "M", right: "D", leftScore: cocreate, rightScore: outsource, selected: code[2] },
+    { axis: "A/R", left: "A", right: "R", leftScore: audit, rightScore: 100 - audit, selected: code[3] },
+  ];
+  return items.map((item) => {
+    const gap = Math.abs(item.leftScore - item.rightScore);
+    return { ...item, gap, strength: getGapStrength(gap) };
+  });
+}
+
+function getAxisResultsForDecoder(result, code) {
+  return result.axisResults?.length ? result.axisResults : buildFallbackAxisResults(code, result.scores || []);
+}
+
+function AxisScoreMeter({ axisResult, accent }) {
+  const total = Math.max(1, axisResult.leftScore + axisResult.rightScore);
+  const leftWidth = Math.round((axisResult.leftScore / total) * 100);
+  const rightWidth = Math.round((axisResult.rightScore / total) * 100);
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2 text-xs font-black text-slate-500">
+        <div className={axisResult.selected === axisResult.left ? "text-slate-900" : "text-slate-400"}>
+          {axisResult.left} {axisResult.leftScore}
+        </div>
+        <div className={`text-right ${axisResult.selected === axisResult.right ? "text-slate-900" : "text-slate-400"}`}>
+          {axisResult.right} {axisResult.rightScore}
+        </div>
+      </div>
+      <div className="flex h-2 overflow-hidden rounded-full bg-white/80 shadow-inner">
+        <div className="h-full" style={{ width: `${leftWidth}%`, background: axisResult.selected === axisResult.left ? accent : "#cbd5e1" }} />
+        <div className="h-full" style={{ width: `${rightWidth}%`, background: axisResult.selected === axisResult.right ? accent : "#cbd5e1" }} />
+      </div>
+    </div>
+  );
 }
 
 function EnergyMeter({ label, score, accent, selected = true }) {
@@ -210,13 +247,11 @@ function DecoderTextBlock({ label, children, tone }) {
   );
 }
 
-function SingleLetterCard({ letter, index, scores }) {
-  const item = SINGLE_LETTER_DECODER[letter];
-  const score = getDecoderScore(scores, item.dimension);
-  const percent = clampPercent(score.percent);
-  const strength = getSingleScoreStrength(percent);
-  const isBoundary = strength === "边界倾向";
+function DecoderCard({ axisResult, index }) {
+  const letter = axisResult.selected;
+  const item = SINGLE_LETTER_DECODER[letter] || MERGE_DELEGATE_DECODER[letter];
   const accent = DECODER_ACCENTS[index];
+  const isBoundary = axisResult.strength === "边界倾向";
 
   return (
     <article className="relative overflow-hidden rounded-[1.75rem] border border-white/85 bg-white/72 p-4 shadow-sm ring-1 ring-white/70 sm:p-5">
@@ -231,12 +266,14 @@ function SingleLetterCard({ letter, index, scores }) {
         <div className="min-w-0">
           <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{item.english}</div>
           <h3 className="mt-1 text-xl font-black leading-tight text-slate-950">{item.chinese}</h3>
-          <div className="mt-2 inline-flex rounded-full bg-white/72 px-3 py-1 text-xs font-black text-slate-600 shadow-sm">{strength}</div>
+          <div className="mt-2 inline-flex rounded-full bg-white/72 px-3 py-1 text-xs font-black text-slate-600 shadow-sm">
+            {axisResult.axis} 分差 {axisResult.gap}｜{axisResult.strength}
+          </div>
         </div>
       </div>
 
       <div className="relative mt-5">
-        <EnergyMeter accent={accent} label={getEnergyName(item.dimension)} score={percent} />
+        <AxisScoreMeter accent={accent} axisResult={axisResult} />
       </div>
 
       {isBoundary ? (
@@ -253,55 +290,6 @@ function SingleLetterCard({ letter, index, scores }) {
     </article>
   );
 }
-
-function MergeDelegateCard({ letter, index, scores }) {
-  const item = MERGE_DELEGATE_DECODER[letter];
-  const cocreate = getDecoderScore(scores, "cocreate");
-  const outsource = getDecoderScore(scores, "outsource");
-  const cocreatePercent = clampPercent(cocreate.percent);
-  const outsourcePercent = clampPercent(outsource.percent);
-  const diff = cocreatePercent - outsourcePercent;
-  const strength = getMergeDelegateStrength(diff);
-  const isBoundary = diff >= -4 && diff <= 4;
-  const accent = DECODER_ACCENTS[index];
-
-  return (
-    <article className="relative overflow-hidden rounded-[1.75rem] border border-white/85 bg-white/72 p-4 shadow-sm ring-1 ring-white/70 sm:p-5">
-      <div className="absolute right-4 top-4 h-16 w-16 rounded-full opacity-20 blur-xl" style={{ background: accent }} />
-      <div className="relative flex items-start gap-3">
-        <div
-          className="grid h-14 w-14 shrink-0 place-items-center rounded-[1.25rem] bg-white text-4xl font-black shadow-sm"
-          style={{ color: accent, boxShadow: `0 16px 32px ${accent}1f` }}
-        >
-          {letter}
-        </div>
-        <div className="min-w-0">
-          <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{item.english}</div>
-          <h3 className="mt-1 text-xl font-black leading-tight text-slate-950">{item.chinese}</h3>
-          <div className="mt-2 inline-flex rounded-full bg-white/72 px-3 py-1 text-xs font-black text-slate-600 shadow-sm">{strength}</div>
-        </div>
-      </div>
-
-      <div className="relative mt-5 grid gap-3">
-        <EnergyMeter accent={accent} label="共创力" score={cocreatePercent} selected={letter === "M"} />
-        <EnergyMeter accent={accent} label="代办力" score={outsourcePercent} selected={letter === "D"} />
-      </div>
-
-      {isBoundary ? (
-        <p className="mt-3 rounded-2xl bg-white/70 px-3 py-2 text-xs font-black leading-5 text-slate-500">
-          你的这个字母不是绝对倾向，更可能会随任务场景变化。
-        </p>
-      ) : null}
-
-      <div className="mt-4 grid gap-3">
-        <DecoderTextBlock label="为什么是这个字母">{item.reason}</DecoderTextBlock>
-        <DecoderTextBlock label="优势" tone="green">{item.advantage}</DecoderTextBlock>
-        <DecoderTextBlock label="提醒" tone="warm">{item.reminder}</DecoderTextBlock>
-      </div>
-    </article>
-  );
-}
-
 function FullScoresToggle({ scores }) {
   const [open, setOpen] = useState(false);
   const sortedScores = [...scores].sort((a, b) => b.percent - a.percent);
@@ -329,30 +317,25 @@ function FullScoresToggle({ scores }) {
   );
 }
 
-function TypeDecoder({ code, scores }) {
-  const letters = code.split("");
+function TypeDecoder({ code, result }) {
+  const axisResults = getAxisResultsForDecoder(result, code);
 
   return (
     <section className="glass rounded-[2rem] p-5 shadow-glow sm:p-6">
       <div className="text-xs font-black uppercase tracking-[0.24em] text-cyan-700">Type Decoder</div>
       <h2 className="mt-2 text-3xl font-black text-slate-950">为什么你是 {code}？</h2>
       <p className="mt-2 max-w-3xl text-sm font-bold leading-6 text-slate-500">
-        四个字母不是标签堆叠，而是由点火力、控场力、共创力与代办力的比较、查错力共同推出来的使用倾向。
+        四个字母来自 v1.1 的 primaryScores：每张卡展示对应轴两端分数、分差强度，以及整体倾向解释。
       </p>
       <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {letters.map((letter, index) => (
-          index === 2 ? (
-            <MergeDelegateCard index={index} key={`${letter}-${index}`} letter={letter} scores={scores} />
-          ) : (
-            <SingleLetterCard index={index} key={`${letter}-${index}`} letter={letter} scores={scores} />
-          )
+        {axisResults.map((axisResult, index) => (
+          <DecoderCard axisResult={axisResult} index={index} key={axisResult.axis} />
         ))}
       </div>
-      <FullScoresToggle scores={scores} />
+      <FullScoresToggle scores={result.scores || []} />
     </section>
   );
 }
-
 function HiddenMode({ mode, score }) {
   const percent = clampPercent(score?.percent);
 
@@ -500,7 +483,7 @@ export default function ResultPage({ result, onRestart }) {
           secondaryScore={secondaryScore}
           testDate={testDate}
         />
-        <TypeDecoder code={display.personalityCode} scores={result.scores} />
+        <TypeDecoder code={display.personalityCode} result={result} />
         <HiddenMode mode={display.hiddenMode} score={getDecoderScore(result.scores, "emotion")} />
         <UserManual display={display} />
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">

@@ -1,183 +1,8 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import ResultPage from "./components/ResultPage.jsx";
 import Mascot from "./components/Mascot.jsx";
-import { dimensions, questions } from "./data/questions.js";
-import { scenarios, scenarioTypes } from "./data/scenarios.js";
-import { getProfile, PERSONA_ORDER, HYBRID_NAMES } from "./data/personalityProfiles.js";
-
-const DIMENSION_ORDER = ["start", "control", "cocreate", "audit", "outsource", "emotion"];
-const SCALE_OPTIONS = [
-  { value: 1, label: "完全不像我" },
-  { value: 2, label: "有点不像" },
-  { value: 3, label: "说不准" },
-  { value: 4, label: "有点像我" },
-  { value: 5, label: "太像我了" },
-];
-
-function shuffle(items) {
-  const next = [...items];
-  for (let i = next.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [next[i], next[j]] = [next[j], next[i]];
-  }
-  return next;
-}
-
-function validateQuestionBank() {
-  if (!Array.isArray(questions) || questions.length !== 48) {
-    throw new Error("量表题库必须恰好包含 48 道题。");
-  }
-  if (!Array.isArray(scenarios) || scenarios.length !== 12) {
-    throw new Error("情境题库必须恰好包含 12 道题。");
-  }
-  for (const dimension of DIMENSION_ORDER) {
-    const group = questions.filter((question) => question.dimension === dimension);
-    const reverseCount = group.filter((question) => question.reverse).length;
-    if (group.length !== 8) {
-      throw new Error(`${dimensions[dimension]?.name || dimension} 必须恰好包含 8 道量表题。`);
-    }
-    if (reverseCount !== 2) {
-      throw new Error(`${dimensions[dimension]?.name || dimension} 必须恰好包含 2 道反向题。`);
-    }
-  }
-  scenarios.forEach((scenario) => {
-    if (!Array.isArray(scenario.options) || scenario.options.length !== 6) {
-      throw new Error(`${scenario.id} 必须包含 6 个情境选项。`);
-    }
-    const keys = scenario.options.map((option) => option.key).join("");
-    if (keys !== "ABCDEF") {
-      throw new Error(`${scenario.id} 的情境选项必须按 A-F 排列。`);
-    }
-  });
-}
-
-function createBalancedQuestionOrder(groupedQuestions) {
-  const buckets = Object.fromEntries(
-    DIMENSION_ORDER.map((dimension) => [dimension, shuffle(groupedQuestions[dimension])]),
-  );
-  let previousLastDimension = null;
-  const rounds = Array.from({ length: 4 }, () => {
-    const order = shuffle(DIMENSION_ORDER);
-    if (previousLastDimension && order[0] === previousLastDimension) {
-      const swapIndex = order.findIndex((dimension) => dimension !== previousLastDimension);
-      [order[0], order[swapIndex]] = [order[swapIndex], order[0]];
-    }
-    previousLastDimension = order[order.length - 1];
-    return order;
-  });
-
-  return rounds.flatMap((round) => round.map((dimension) => buckets[dimension].shift()));
-}
-
-function createSession() {
-  validateQuestionBank();
-  const sampledByDimension = Object.fromEntries(
-    DIMENSION_ORDER.map((dimension) => {
-      const group = questions.filter((question) => question.dimension === dimension);
-      const reverseItems = shuffle(group.filter((question) => question.reverse));
-      const normalItems = shuffle(group.filter((question) => !question.reverse));
-      const reverseTake = Math.random() < 0.5 ? 1 : 2;
-      return [
-        dimension,
-        shuffle([
-          ...reverseItems.slice(0, reverseTake),
-          ...normalItems.slice(0, 4 - reverseTake),
-        ]),
-      ];
-    }),
-  );
-  return {
-    scaleQuestions: createBalancedQuestionOrder(sampledByDimension),
-    scenarioQuestions: shuffle(scenarios).slice(0, 3),
-  };
-}
-
-function calculateResult(scaleAnswers, scenarioAnswers, session) {
-  const rawByDimension = Object.fromEntries(DIMENSION_ORDER.map((dimension) => [dimension, 0]));
-  session.scaleQuestions.forEach((question) => {
-    const value = scaleAnswers[question.id];
-    rawByDimension[question.dimension] += question.reverse ? 6 - value : value;
-  });
-  const scores = DIMENSION_ORDER.map((dimension) => ({
-    dimension,
-    name: dimensions[dimension].name,
-    persona: dimensions[dimension].personality,
-    raw: rawByDimension[dimension],
-    percent: Math.round(((rawByDimension[dimension] - 4) / 16) * 100),
-  })).sort((a, b) => b.percent - a.percent);
-
-  const top = scores[0];
-  const second = scores[1];
-  const third = scores[2];
-  const lowest = scores[scores.length - 1];
-  const belowFifty = scores.filter((score) => score.percent < 50).length;
-  const spread = top.percent - lowest.percent;
-
-  let pattern = "single";
-  let title = top.persona;
-  let clarity = "高";
-  let primaryPersonas = [top.persona];
-
-  if (top.percent < 55 && belowFifty >= 4) {
-    pattern = "weak";
-    title = "AI 使用人格未显著";
-    clarity = "低";
-    primaryPersonas = [];
-  } else if (top.percent >= 70 && top.percent - second.percent >= 15) {
-    pattern = "single";
-    title = top.persona;
-    clarity = "高";
-    primaryPersonas = [top.persona];
-  } else if (top.percent >= 70 && second.percent >= 60 && top.percent - second.percent >= 9 && top.percent - second.percent <= 14) {
-    pattern = "primarySecondary";
-    title = `主副型：${top.persona} + ${second.persona}`;
-    clarity = "中";
-    primaryPersonas = [top.persona, second.persona];
-  } else if (top.percent >= 65 && second.percent >= 65 && third.percent >= 65 && top.percent - third.percent <= 12) {
-    pattern = "triple";
-    title = `三重复合型：${top.persona} + ${second.persona} + ${third.persona}`;
-    clarity = "混合型明显";
-    primaryPersonas = [top.persona, second.persona, third.persona];
-  } else if (top.percent >= 65 && second.percent >= 65 && top.percent - second.percent <= 8) {
-    pattern = "dual";
-    const hybridName = HYBRID_NAMES[`${top.persona}+${second.persona}`] || "双核心混合型";
-    title = `${hybridName}：${top.persona} + ${second.persona}`;
-    clarity = "混合型明显";
-    primaryPersonas = [top.persona, second.persona];
-  } else if (scores.every((score) => score.percent >= 40 && score.percent <= 69) || (spread <= 25 && top.percent < 75)) {
-    pattern = "balanced";
-    title = "均衡使用型";
-    clarity = "中低";
-    primaryPersonas = [];
-  } else {
-    pattern = "balanced";
-    title = "均衡使用型";
-    clarity = "中低";
-    primaryPersonas = [];
-  }
-
-  const scenarioCounts = {};
-  Object.values(scenarioAnswers).forEach((key) => {
-    const persona = scenarioTypes[key];
-    scenarioCounts[persona] = (scenarioCounts[persona] || 0) + 1;
-  });
-  const scenarioLeaders = Object.entries(scenarioCounts)
-    .sort((a, b) => b[1] - a[1])
-    .filter((entry, _, list) => entry[1] === list[0]?.[1])
-    .map(([persona]) => persona);
-  const consistent = primaryPersonas.some((persona) => scenarioLeaders.includes(persona));
-
-  return {
-    scores,
-    title,
-    clarity,
-    pattern,
-    profileKey: primaryPersonas[0] || title,
-    primaryPersonas,
-    scenarioLeaders,
-    consistent,
-  };
-}
+import { calculateResultV11, generateQuestionSetV11 } from "./data/questionBankV11.js";
+import { getProfile, PERSONA_ORDER } from "./data/personalityProfiles.js";
 
 function Shell({ page, setPage, children }) {
   return (
@@ -212,16 +37,16 @@ function Home({ onStart, setPage, error }) {
     <section className="grid min-h-[calc(100vh-112px)] items-center gap-8 py-6 lg:grid-cols-[1fr_1fr]">
       <div>
         <div className="mb-5 inline-flex rounded-full bg-white/80 px-4 py-2 text-sm font-bold text-cyan-700 shadow-sm">
-          AI Use ID Card / AI 使用人格名片
+          AI Use ID Card / v1.1 自然情境题库
         </div>
         <h1 className="max-w-3xl text-5xl font-black leading-tight text-slate-950 sm:text-6xl lg:text-7xl">
           AI 使用人格测试
         </h1>
         <p className="mt-6 max-w-2xl text-xl font-bold leading-8 text-slate-700">
-          你和 AI 的相处方式，可能比你想象中更有性格。
+          通过 20 个真实使用场景，看看你更习惯怎样和 AI 协作。
         </p>
         <p className="mt-4 max-w-2xl text-base leading-7 text-slate-500">
-          本测试不是心理诊断，而是一个关于 AI 互动风格的趣味测评。
+          新版不再使用直白量表题，而是用两难选择和自然情境来判断四字母人格码。
         </p>
         {error ? (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 font-bold text-red-700">
@@ -269,174 +94,6 @@ function Home({ onStart, setPage, error }) {
   );
 }
 
-function ScalePage({ session, answers, setAnswers, currentIndex, setCurrentIndex, onNext }) {
-  const question = session.scaleQuestions[currentIndex];
-  const answered = Object.keys(answers).length;
-  const selected = answers[question.id];
-  const progress = ((currentIndex + (selected ? 1 : 0)) / session.scaleQuestions.length) * 100;
-
-  function chooseAnswer(value) {
-    setAnswers((current) => ({ ...current, [question.id]: value }));
-    window.setTimeout(() => {
-      if (currentIndex < session.scaleQuestions.length - 1) {
-        setCurrentIndex(currentIndex + 1);
-      } else {
-        onNext();
-      }
-    }, 180);
-  }
-
-  return (
-    <section className="grid min-h-[calc(100vh-112px)] items-center py-4">
-      <div>
-        <PageTitle
-          kicker="AI Energy Scan"
-          title="正在收集你的 AI 互动能量"
-          detail={`${currentIndex + 1} / ${session.scaleQuestions.length}`}
-        />
-        <div className="mt-4">
-          <Progress value={progress} />
-        </div>
-        <article className="glass mt-6 rounded-[2rem] p-5 shadow-glow sm:p-8">
-          <div className="mb-5 inline-flex rounded-full bg-white/72 px-4 py-2 text-sm font-black text-slate-600">
-            正在收集你的 AI 互动能量：{currentIndex + 1} / {session.scaleQuestions.length}
-          </div>
-          <p className="min-h-[112px] text-2xl font-black leading-10 text-slate-950 sm:text-3xl">
-            {question.text}
-          </p>
-          <div className="mt-8 grid gap-3 sm:grid-cols-5">
-            {SCALE_OPTIONS.map((option) => (
-              <button
-                className={`answer-ring min-h-[72px] rounded-3xl px-4 py-4 text-base font-black transition ${
-                  selected === option.value
-                    ? "bg-slate-950 text-white shadow-lg"
-                    : "bg-white/78 text-slate-700 hover:-translate-y-0.5 hover:bg-white"
-                }`}
-                key={option.value}
-                onClick={() => chooseAnswer(option.value)}
-              >
-                <span className="block text-2xl font-black">{option.value}</span>
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </article>
-        <div className="mt-5 flex justify-between">
-          <button
-            className="rounded-2xl bg-white/75 px-5 py-3 font-black text-slate-600 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={currentIndex === 0}
-            onClick={() => setCurrentIndex(currentIndex - 1)}
-          >
-            上一题
-          </button>
-          <div className="rounded-2xl bg-white/65 px-5 py-3 text-sm font-bold text-slate-500">
-            选择后自动进入下一题
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ScenarioPage({ session, answers, setAnswers, currentIndex, setCurrentIndex, onBack, onFinish }) {
-  const scenario = session.scenarioQuestions[currentIndex];
-  const answered = Object.keys(answers).length;
-  const selected = answers[scenario.id];
-  const progress = ((currentIndex + (selected ? 1 : 0)) / session.scenarioQuestions.length) * 100;
-
-  function chooseOption(key) {
-    setAnswers((current) => ({ ...current, [scenario.id]: key }));
-    window.setTimeout(() => {
-      if (currentIndex < session.scenarioQuestions.length - 1) {
-        setCurrentIndex(currentIndex + 1);
-      } else {
-        onFinish();
-      }
-    }, 180);
-  }
-
-  return (
-    <section className="grid min-h-[calc(100vh-112px)] items-center py-4">
-      <div>
-        <PageTitle
-          kicker="Scenario"
-          title="AI 小剧场"
-          detail={`${currentIndex + 1} / ${session.scenarioQuestions.length}`}
-        />
-        <p className="mt-3 text-base font-bold text-slate-500">下面是几个日常场景，选出你最可能的反应。</p>
-        <div className="mt-4">
-          <Progress value={progress} />
-        </div>
-        <article className="glass mt-6 rounded-[2rem] p-5 shadow-glow sm:p-8">
-          <div className="mb-4 inline-flex rounded-full bg-white/72 px-4 py-2 text-sm font-black text-slate-600">
-            AI 小剧场：{answered + (selected ? 0 : 1)} / {session.scenarioQuestions.length}
-          </div>
-          <h2 className="text-3xl font-black text-slate-950">{scenario.title}</h2>
-          <p className="mt-4 text-base leading-8 text-slate-650">{scenario.text}</p>
-          <div className="mt-7 grid gap-3 md:grid-cols-2">
-            {scenario.options.map((option) => (
-              <button
-                className={`rounded-[1.6rem] border p-4 text-left text-base font-bold leading-7 transition ${
-                  selected === option.key
-                    ? "border-slate-950 bg-slate-950 text-white shadow-lg"
-                    : "border-white/80 bg-white/76 text-slate-700 shadow-sm hover:-translate-y-0.5 hover:bg-white"
-                }`}
-                key={option.key}
-                onClick={() => chooseOption(option.key)}
-              >
-                <span className="mr-2 inline-grid h-8 w-8 place-items-center rounded-full bg-cyan-300 text-sm font-black text-slate-950">
-                  {option.key}
-                </span>
-                {option.text}
-              </button>
-            ))}
-          </div>
-        </article>
-        <div className="mt-5 flex justify-between gap-3">
-          <button
-            className="rounded-2xl bg-white/75 px-5 py-3 font-black text-slate-600 shadow-sm transition hover:bg-white"
-            onClick={() => {
-              if (currentIndex === 0) {
-                onBack();
-              } else {
-                setCurrentIndex(currentIndex - 1);
-              }
-            }}
-          >
-            上一题
-          </button>
-          <div className="rounded-2xl bg-white/65 px-5 py-3 text-sm font-bold text-slate-500">
-            选择后自动进入下一步
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function About() {
-  return (
-    <section className="py-6">
-      <div className="glass rounded-[2rem] p-6 shadow-glow sm:p-8">
-        <PageTitle kicker="About" title="关于测试" detail="本测试仅用于理解 AI 使用偏好，不用于心理诊断。" />
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {[
-            ["抽题方式", "每次从固定题库中抽取 24 道量表题，六个维度各 4 道，并保证每个维度含 1-2 道反向题。"],
-            ["计分方式", "量表题按 1-5 分计分，反向题使用 6 - 原始分，每个维度转换为百分制。"],
-            ["情境题", "每次随机抽取 3 道，只用于补充说明，不参与主分判定。"],
-            ["结果名片", "完成后生成一张 AI Use ID Card，可以保存为图片，也可以复制结果摘要。"],
-          ].map(([title, text]) => (
-            <div className="rounded-3xl bg-white/75 p-5 shadow-sm" key={title}>
-              <h2 className="text-xl font-black text-slate-950">{title}</h2>
-              <p className="mt-3 leading-7 text-slate-650">{text}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function PageTitle({ kicker, title, detail }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
@@ -460,65 +117,144 @@ function Progress({ value }) {
   );
 }
 
+function QuestionPage({ answers, currentIndex, onBack, onChoose, question, total }) {
+  const selected = answers[currentIndex]?.optionId;
+  const progress = ((currentIndex + (selected ? 1 : 0)) / total) * 100;
+
+  return (
+    <section className="grid min-h-[calc(100vh-112px)] items-center py-4">
+      <div>
+        <PageTitle kicker={question.type === "dilemma" ? "Dilemma" : "Scenario"} title="AI 使用小剧场" detail={`${currentIndex + 1} / ${total}`} />
+        <div className="mt-4">
+          <Progress value={progress} />
+        </div>
+        <article className="glass mt-6 rounded-[2rem] p-5 shadow-glow sm:p-8">
+          <div className="mb-4 flex flex-wrap gap-2">
+            <span className="rounded-full bg-white/72 px-4 py-2 text-sm font-black text-slate-600">{question.title}</span>
+            <span className="rounded-full bg-cyan-100/80 px-4 py-2 text-sm font-black text-cyan-800">{question.primaryAxis}</span>
+          </div>
+          <p className="min-h-[92px] text-2xl font-black leading-10 text-slate-950 sm:text-3xl">{question.text}</p>
+          <div className="mt-8 grid gap-3 md:grid-cols-2">
+            {question.options.map((option) => (
+              <button
+                className={`rounded-[1.6rem] border p-4 text-left text-base font-bold leading-7 transition ${
+                  selected === option.id
+                    ? "border-slate-950 bg-slate-950 text-white shadow-lg"
+                    : "border-white/80 bg-white/76 text-slate-700 shadow-sm hover:-translate-y-0.5 hover:bg-white"
+                }`}
+                key={option.id}
+                onClick={() => onChoose(question, option)}
+              >
+                <span className="mr-2 inline-grid h-8 w-8 place-items-center rounded-full bg-cyan-300 text-sm font-black text-slate-950">
+                  {option.id}
+                </span>
+                {option.text}
+              </button>
+            ))}
+          </div>
+        </article>
+        <div className="mt-5 flex justify-between gap-3">
+          <button
+            className="rounded-2xl bg-white/75 px-5 py-3 font-black text-slate-600 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={currentIndex === 0}
+            onClick={onBack}
+          >
+            上一题
+          </button>
+          <div className="rounded-2xl bg-white/65 px-5 py-3 text-sm font-bold text-slate-500">
+            选择后自动进入下一题
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function About() {
+  return (
+    <section className="py-6">
+      <div className="glass rounded-[2rem] p-6 shadow-glow sm:p-8">
+        <PageTitle kicker="About" title="关于 v1.1 测试" detail="本测试仅用于理解 AI 使用偏好，不用于心理诊断。" />
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          {[
+            ["题库结构", "后台题库共 40 道：16 道两难选择题 + 24 道自然情境题。"],
+            ["抽题方式", "每次抽取 20 道，四个轴各抽 2 道两难题和 3 道自然情境题，并打乱顺序。"],
+            ["计分方式", "四字母人格码只由 primaryScores 决定，secondarySignals 只用于补充解释。"],
+            ["Hidden Mode", "共感力单独累计 emotionScore，只影响 Moon / Soft / Tool Mode。"],
+          ].map(([title, text]) => (
+            <div className="rounded-3xl bg-white/75 p-5 shadow-sm" key={title}>
+              <h2 className="text-xl font-black text-slate-950">{title}</h2>
+              <p className="mt-3 leading-7 text-slate-650">{text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
   const [page, setPage] = useState("home");
-  const [session, setSession] = useState(null);
-  const [scaleAnswers, setScaleAnswers] = useState({});
-  const [scenarioAnswers, setScenarioAnswers] = useState({});
-  const [scaleIndex, setScaleIndex] = useState(0);
-  const [scenarioIndex, setScenarioIndex] = useState(0);
+  const [questionSet, setQuestionSet] = useState([]);
+  const [answerRecords, setAnswerRecords] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState("");
 
   const result = useMemo(() => {
-    if (!session || page !== "result") return null;
-    return calculateResult(scaleAnswers, scenarioAnswers, session);
-  }, [page, scaleAnswers, scenarioAnswers, session]);
+    if (page !== "result" || answerRecords.length !== questionSet.length || questionSet.length === 0) return null;
+    return calculateResultV11(answerRecords, questionSet);
+  }, [answerRecords, page, questionSet]);
 
   function startTest() {
     try {
-      const nextSession = createSession();
-      setSession(nextSession);
-      setScaleAnswers({});
-      setScenarioAnswers({});
-      setScaleIndex(0);
-      setScenarioIndex(0);
+      const nextQuestionSet = generateQuestionSetV11();
+      setQuestionSet(nextQuestionSet);
+      setAnswerRecords([]);
+      setCurrentIndex(0);
       setError("");
-      setPage("scale");
+      setPage("question");
     } catch (err) {
       setError(err.message);
       setPage("home");
     }
   }
 
+  function chooseAnswer(question, option) {
+    const record = {
+      questionId: question.id,
+      optionId: option.id,
+      primaryScores: { ...option.primaryScores },
+      secondarySignals: { ...option.secondarySignals },
+      emotionScore: option.emotionScore || 0,
+    };
+
+    setAnswerRecords((current) => {
+      const next = [...current];
+      next[currentIndex] = record;
+      return next;
+    });
+
+    window.setTimeout(() => {
+      if (currentIndex < questionSet.length - 1) {
+        setCurrentIndex((index) => index + 1);
+      } else {
+        setPage("result");
+      }
+    }, 180);
+  }
+
   return (
     <Shell page={page} setPage={setPage}>
       {page === "home" ? <Home error={error} onStart={startTest} setPage={setPage} /> : null}
       {page === "about" ? <About /> : null}
-      {page === "scale" && session ? (
-        <ScalePage
-          answers={scaleAnswers}
-          currentIndex={scaleIndex}
-          onNext={() => {
-            setScenarioIndex(0);
-            setPage("scenario");
-          }}
-          session={session}
-          setAnswers={setScaleAnswers}
-          setCurrentIndex={setScaleIndex}
-        />
-      ) : null}
-      {page === "scenario" && session ? (
-        <ScenarioPage
-          answers={scenarioAnswers}
-          currentIndex={scenarioIndex}
-          onBack={() => {
-            setScaleIndex(session.scaleQuestions.length - 1);
-            setPage("scale");
-          }}
-          onFinish={() => setPage("result")}
-          session={session}
-          setAnswers={setScenarioAnswers}
-          setCurrentIndex={setScenarioIndex}
+      {page === "question" && questionSet[currentIndex] ? (
+        <QuestionPage
+          answers={answerRecords}
+          currentIndex={currentIndex}
+          onBack={() => setCurrentIndex((index) => Math.max(0, index - 1))}
+          onChoose={chooseAnswer}
+          question={questionSet[currentIndex]}
+          total={questionSet.length}
         />
       ) : null}
       {page === "result" && result ? <ResultPage onRestart={startTest} result={result} /> : null}
