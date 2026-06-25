@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { toBlob, toPng } from "html-to-image";
+import ResultExplanationPoster from "./ResultExplanationPoster.jsx";
 import ResultShareCard from "./ResultShareCard.jsx";
 import { getEnergyName, getProfile, getResultDisplay } from "../data/personalityProfiles.js";
 
@@ -390,7 +391,8 @@ function UserManual({ display }) {
 
 export default function ResultPage({ result, onRestart }) {
   const cardRef = useRef(null);
-  const [saving, setSaving] = useState(false);
+  const posterRef = useRef(null);
+  const [savingTarget, setSavingTarget] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
   const [mobileShareFile, setMobileShareFile] = useState(null);
   const display = useMemo(() => getResultDisplay(result), [result]);
@@ -435,34 +437,40 @@ export default function ResultPage({ result, onRestart }) {
     }
   }
 
-  async function saveCard() {
-    if (!cardRef.current || saving) return;
-    const filename = `ai-use-id-card-${aiId}.png`;
-    setSaving(true);
+  async function saveExport(target, node, filename) {
+    if (!node || savingTarget) return;
+    setSavingTarget(target);
     setMobileShareFile(null);
-    setSaveMessage("\u6b63\u5728\u6574\u7406\u56fe\u7247\u8d44\u6e90...");
+    setSaveMessage("正在整理图片资源...");
     try {
-      await waitForCardAssets(cardRef.current);
-      const blob = await createCardBlob(cardRef.current);
+      await waitForCardAssets(node);
+      const blob = await createCardBlob(node);
 
       if (isMobileSaveTarget() && typeof globalThis.File === "function") {
         const file = new globalThis.File([blob], filename, { type: "image/png" });
         if (navigator.canShare?.({ files: [file] })) {
           setMobileShareFile(file);
-          setSaveMessage("\u56fe\u7247\u5df2\u751f\u6210\u3002\u624b\u673a\u7aef\u8bf7\u518d\u70b9\u4e00\u6b21\u201c\u4fdd\u5b58\u5230\u624b\u673a/\u76f8\u518c\u201d\u3002");
+          setSaveMessage("图片已生成。手机端请再点一次“保存到手机/相册”。");
           return;
         }
       }
 
       downloadBlob(blob, filename);
-      setSaveMessage(isMobileSaveTarget() ? "\u5982\u679c\u624b\u673a\u6ca1\u6709\u81ea\u52a8\u4fdd\u5b58\uff0c\u8bf7\u5728\u6d4f\u89c8\u5668\u4e0b\u8f7d\u5217\u8868\u4e2d\u67e5\u770b\uff0c\u6216\u6362 Safari / Chrome \u91cd\u8bd5\u3002" : "\u56fe\u7247\u5df2\u751f\u6210\uff0c\u6d4f\u89c8\u5668\u4f1a\u81ea\u52a8\u4e0b\u8f7d PNG \u6587\u4ef6\u3002");
+      setSaveMessage(isMobileSaveTarget() ? "如果手机没有自动保存，请在浏览器下载列表中查看，或换 Safari / Chrome 重试。" : "图片已生成，浏览器会自动下载 PNG 文件。");
     } catch {
-      setSaveMessage("\u56fe\u7247\u751f\u6210\u5931\u8d25\u3002\u8bf7\u5237\u65b0\u9875\u9762\u540e\u91cd\u8bd5\uff0c\u6216\u6362 Safari / Chrome \u6253\u5f00\u3002");
+      setSaveMessage("图片生成失败。请刷新页面后重试，或换 Safari / Chrome 打开。");
     } finally {
-      setSaving(false);
+      setSavingTarget("");
     }
   }
 
+  function saveCard() {
+    return saveExport("card", cardRef.current, `ai-use-id-card-${aiId}.png`);
+  }
+
+  function savePoster() {
+    return saveExport("poster", posterRef.current, `ai-use-report-${aiId}.png`);
+  }
   return (
     <section className="mx-auto max-w-5xl py-4">
       <div className="mb-6">
@@ -476,7 +484,6 @@ export default function ResultPage({ result, onRestart }) {
       <div className="grid gap-6">
         <ResultShareCard
           aiId={aiId}
-          cardRef={cardRef}
           clarity={result.clarity}
           display={display}
           profile={profile}
@@ -489,10 +496,17 @@ export default function ResultPage({ result, onRestart }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <button
             className="rounded-2xl bg-slate-950 px-6 py-4 font-black text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-wait disabled:opacity-70"
-            disabled={saving}
+            disabled={Boolean(savingTarget)}
             onClick={saveCard}
           >
-            {saving ? "正在生成图片..." : "保存我的 AI 人格名片"}
+            {savingTarget === "card" ? "正在生成名片..." : "保存名片"}
+          </button>
+          <button
+            className="rounded-2xl bg-cyan-500 px-6 py-4 font-black text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-cyan-600 disabled:cursor-wait disabled:opacity-70"
+            disabled={Boolean(savingTarget)}
+            onClick={savePoster}
+          >
+            {savingTarget === "poster" ? "正在生成完整解码图..." : "保存完整解码图"}
           </button>
           <button
             className="rounded-2xl bg-white/80 px-6 py-4 font-black text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
@@ -515,6 +529,28 @@ export default function ResultPage({ result, onRestart }) {
           </div>
         ) : null}
         {saveMessage ? <p className="text-center text-sm font-bold leading-6 text-slate-500" role="status">{saveMessage}</p> : null}
+        <div className="pointer-events-none absolute left-[-9999px] top-0" aria-hidden="true">
+          <div className="w-[1080px] bg-[#f7f8ff] px-[260px] py-[48px]">
+            <ResultShareCard
+              aiId={aiId}
+              cardRef={cardRef}
+              clarity={result.clarity}
+              display={display}
+              profile={profile}
+              secondaryScore={secondaryScore}
+              testDate={testDate}
+            />
+          </div>
+          <div ref={posterRef}>
+            <ResultExplanationPoster
+              aiId={aiId}
+              display={display}
+              profile={profile}
+              result={result}
+              testDate={testDate}
+            />
+          </div>
+        </div>
       </div>
     </section>
   );

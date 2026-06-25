@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import ResultPage from "./components/ResultPage.jsx";
 import Mascot from "./components/Mascot.jsx";
 import { calculateResultV11, generateQuestionSetV11 } from "./data/questionBankV11.js";
@@ -131,7 +131,6 @@ function QuestionPage({ answers, currentIndex, onBack, onChoose, question, total
         <article className="glass mt-6 rounded-[2rem] p-5 shadow-glow sm:p-8">
           <div className="mb-4 flex flex-wrap gap-2">
             <span className="rounded-full bg-white/72 px-4 py-2 text-sm font-black text-slate-600">{question.title}</span>
-            <span className="rounded-full bg-cyan-100/80 px-4 py-2 text-sm font-black text-cyan-800">{question.primaryAxis}</span>
           </div>
           <p className="min-h-[92px] text-2xl font-black leading-10 text-slate-950 sm:text-3xl">{question.text}</p>
           <div className="mt-8 grid gap-3 md:grid-cols-2">

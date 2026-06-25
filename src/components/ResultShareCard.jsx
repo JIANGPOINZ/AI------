@@ -59,6 +59,11 @@ export default function ResultShareCard({
         <div className="mt-1 text-sm font-black uppercase tracking-[0.16em] text-slate-500">{display.englishName}</div>
         <p className="mx-auto mt-4 max-w-[450px] text-lg font-bold leading-8 text-slate-700 sm:text-xl">{display.chineseLine}</p>
 
+        <div className="mx-auto mt-5 inline-flex max-w-full items-center gap-2 rounded-full bg-white/70 px-4 py-2 text-xs font-black text-slate-600 shadow-sm">
+          <span className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Hidden Mode</span>
+          <span>{display.hiddenMode.label}</span>
+        </div>
+
         <div className="mt-6 flex items-center justify-between gap-3 pt-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
           <span>{testDate}</span>
           <span>{clarity}</span>
