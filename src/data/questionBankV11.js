@@ -519,7 +519,9 @@ export function calculateResultV11(answerRecords, questionSet) {
   const secondarySignals = emptyTypeScores();
   let emotionScore = 0;
 
-  answerRecords.forEach((record) => {
+  const validAnswerRecords = answerRecords.filter((record) => record?.primaryScores && record?.secondarySignals);
+
+  validAnswerRecords.forEach((record) => {
     addScores(finalTypeScores, record.primaryScores);
     addScores(secondarySignals, record.secondarySignals);
     emotionScore += record.emotionScore || 0;
@@ -553,7 +555,7 @@ export function calculateResultV11(answerRecords, questionSet) {
     maxPossibleEmotionScore,
     emotionRatio,
     axisResults,
-    answerRecords,
+    answerRecords: validAnswerRecords,
     questionCount: questionSet.length,
     title: typeCode,
     clarity: axisResults.some((axis) => axis.strength === "边界倾向") ? "中" : "高",

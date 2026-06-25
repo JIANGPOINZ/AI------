@@ -200,7 +200,8 @@ export default function App() {
   const [error, setError] = useState("");
 
   const result = useMemo(() => {
-    if (page !== "result" || answerRecords.length !== questionSet.length || questionSet.length === 0) return null;
+    const answeredCount = answerRecords.filter(Boolean).length;
+    if (page !== "result" || answeredCount !== questionSet.length || questionSet.length === 0) return null;
     return calculateResultV11(answerRecords, questionSet);
   }, [answerRecords, page, questionSet]);
 
