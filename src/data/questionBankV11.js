@@ -424,12 +424,6 @@ export const dilemmaQuestions = [
     hasEmotionOption: false
   }
 ];
-export const scenarioQuestions = [];
-
-export const questionBankV11 = {
-  dilemmaQuestions,
-  scenarioQuestions,
-};
 
 const TYPE_KEYS = ["S", "O", "C", "F", "M", "D", "A", "R"];
 const AXIS_PAIRS = {
@@ -567,7 +561,6 @@ export function calculateResultV11(answerRecords, questionSet) {
     profileKey: scores[0]?.persona || "均衡使用型",
   };
 }
-```js
 export const scenarioQuestions = [
   // =========================
   // S / O 主覆盖：启动方式
@@ -1694,4 +1687,3 @@ export const questionBankV11 = {
   dilemmaQuestions,
   scenarioQuestions
 };
-```
