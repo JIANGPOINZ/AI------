@@ -3,6 +3,16 @@ import { toBlob, toPng } from "html-to-image";
 import ResultExplanationPoster from "./ResultExplanationPoster.jsx";
 import ResultShareCard from "./ResultShareCard.jsx";
 import { getEnergyName, getProfile, getResultDisplay } from "../data/personalityProfiles.js";
+const RESULT_STORAGE_KEY = "aiUseResultV11";
+
+function readSavedResult() {
+  try {
+    const savedResult = globalThis.localStorage?.getItem(RESULT_STORAGE_KEY);
+    return savedResult ? JSON.parse(savedResult) : null;
+  } catch {
+    return null;
+  }
+}
 
 const SINGLE_LETTER_DECODER = {
   S: {
@@ -389,7 +399,7 @@ function UserManual({ display }) {
   );
 }
 
-export default function ResultPage({ result, onRestart }) {
+function ResultPageContent({ result, onRestart }) {
   const cardRef = useRef(null);
   const posterRef = useRef(null);
   const [savingTarget, setSavingTarget] = useState("");
@@ -472,7 +482,7 @@ export default function ResultPage({ result, onRestart }) {
     return saveExport("poster", posterRef.current, `ai-use-report-${aiId}.png`);
   }
   return (
-    <section className="mx-auto max-w-5xl py-4">
+    <section className="result-page mx-auto max-w-5xl py-4">
       <div className="mb-6">
         <div className="text-xs font-black uppercase tracking-[0.28em] text-cyan-700">AI Use ID Card</div>
         <h1 className="mt-2 text-4xl font-black text-slate-950 sm:text-5xl">你的 AI 使用人格名片</h1>
@@ -529,7 +539,7 @@ export default function ResultPage({ result, onRestart }) {
           </div>
         ) : null}
         {saveMessage ? <p className="text-center text-sm font-bold leading-6 text-slate-500" role="status">{saveMessage}</p> : null}
-        <div className="pointer-events-none absolute left-[-9999px] top-0" aria-hidden="true">
+        <div className="export-only pointer-events-none absolute left-[-9999px] top-0" aria-hidden="true">
           <div className="w-[1080px] bg-[#f7f8ff] px-[260px] py-[48px]">
             <ResultShareCard
               aiId={aiId}
@@ -555,4 +565,26 @@ export default function ResultPage({ result, onRestart }) {
     </section>
   );
 }
+export default function ResultPage({ result: currentResult, onRestart }) {
+  const savedResult = readSavedResult();
+  const result = currentResult || savedResult;
 
+  if (!result) {
+    return (
+      <section className="result-page mx-auto max-w-5xl py-16">
+        <div className="glass rounded-[2rem] p-6 text-center shadow-glow sm:p-8">
+          <p className="text-lg font-black text-slate-800">还没有测试结果，请先完成测试。</p>
+          <button
+            className="mt-6 rounded-2xl bg-slate-950 px-7 py-4 text-base font-black text-white shadow-glow transition hover:-translate-y-0.5 hover:bg-slate-800"
+            onClick={onRestart}
+            type="button"
+          >
+            开始测试
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  return <ResultPageContent onRestart={onRestart} result={result} />;
+}

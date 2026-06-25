@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ResultPage from "./components/ResultPage.jsx";
 import Mascot from "./components/Mascot.jsx";
 import { calculateResultV11, generateQuestionSetV11 } from "./data/questionBankV11.js";
 import { getProfile, PERSONA_ORDER } from "./data/personalityProfiles.js";
+
+const RESULT_STORAGE_KEY = "aiUseResultV11";
 
 function Shell({ page, setPage, children }) {
   return (
@@ -205,6 +207,11 @@ export default function App() {
     return calculateResultV11(answerRecords, questionSet);
   }, [answerRecords, page, questionSet]);
 
+  useEffect(() => {
+    if (!result) return;
+    localStorage.setItem(RESULT_STORAGE_KEY, JSON.stringify(result));
+  }, [result]);
+
   function startTest() {
     try {
       const nextQuestionSet = generateQuestionSetV11();
@@ -257,7 +264,7 @@ export default function App() {
           total={questionSet.length}
         />
       ) : null}
-      {page === "result" && result ? <ResultPage onRestart={startTest} result={result} /> : null}
+      {page === "result" ? <ResultPage onRestart={startTest} result={result} /> : null}
     </Shell>
   );
 }
