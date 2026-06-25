@@ -121,6 +121,7 @@ function Progress({ value }) {
 
 function QuestionPage({ answers, currentIndex, onBack, onChoose, question, total }) {
   const selected = answers[currentIndex]?.optionId;
+  const selectedOptionKey = selected ? `${question.id}-${selected}` : null;
   const progress = ((currentIndex + (selected ? 1 : 0)) / total) * 100;
 
   return (
@@ -130,28 +131,31 @@ function QuestionPage({ answers, currentIndex, onBack, onChoose, question, total
         <div className="mt-4">
           <Progress value={progress} />
         </div>
-        <article className="glass mt-6 rounded-[2rem] p-5 shadow-glow sm:p-8">
+        <article className="glass mt-6 rounded-[2rem] p-5 shadow-glow sm:p-8" key={question.id}>
           <div className="mb-4 flex flex-wrap gap-2">
             <span className="rounded-full bg-white/72 px-4 py-2 text-sm font-black text-slate-600">{question.title}</span>
           </div>
           <p className="min-h-[92px] text-2xl font-black leading-10 text-slate-950 sm:text-3xl">{question.text}</p>
           <div className="mt-8 grid gap-3 md:grid-cols-2">
-            {question.options.map((option) => (
-              <button
-                className={`rounded-[1.6rem] border p-4 text-left text-base font-bold leading-7 transition ${
-                  selected === option.id
-                    ? "border-slate-950 bg-slate-950 text-white shadow-lg"
-                    : "border-white/80 bg-white/76 text-slate-700 shadow-sm hover:-translate-y-0.5 hover:bg-white"
-                }`}
-                key={option.id}
-                onClick={() => onChoose(question, option)}
-              >
-                <span className="mr-2 inline-grid h-8 w-8 place-items-center rounded-full bg-cyan-300 text-sm font-black text-slate-950">
-                  {option.id}
-                </span>
-                {option.text}
-              </button>
-            ))}
+            {question.options.map((option) => {
+              const optionKey = `${question.id}-${option.id}`;
+              return (
+                <button
+                  className={`rounded-[1.6rem] border p-4 text-left text-base font-bold leading-7 transition ${
+                    selectedOptionKey === optionKey
+                      ? "border-slate-950 bg-slate-950 text-white shadow-lg"
+                      : "border-white/80 bg-white/76 text-slate-700 shadow-sm hover:-translate-y-0.5 hover:bg-white"
+                  }`}
+                  key={optionKey}
+                  onClick={() => onChoose(question, option)}
+                >
+                  <span className="mr-2 inline-grid h-8 w-8 place-items-center rounded-full bg-cyan-300 text-sm font-black text-slate-950">
+                    {option.id}
+                  </span>
+                  {option.text}
+                </button>
+              );
+            })}
           </div>
         </article>
         <div className="mt-5 flex justify-between gap-3">
